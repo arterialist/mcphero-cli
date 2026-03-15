@@ -14,7 +14,7 @@ CONFIG_DIR = Path.home() / ".config" / "mcpheroctl"
 CONFIG_FILE = CONFIG_DIR / "config.json"
 
 # Default base URL for the MCPHero API
-DEFAULT_BASE_URL = "https://api.mcphero.app"
+DEFAULT_BASE_URL = "https://api.mcphero.app/api"
 
 
 class Config(BaseModel):

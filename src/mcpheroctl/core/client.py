@@ -40,9 +40,9 @@ def _build_client(token: str, base_url: str) -> httpx.Client:
         base_url=base_url,
         headers={
             "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json",
         },
         timeout=_TIMEOUT,
+        follow_redirects=True,
     )
 
 
