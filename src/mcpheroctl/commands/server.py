@@ -52,17 +52,22 @@ def _handle_api_error(exc: APIError, *, use_json: bool) -> None:
 @server_app.command("list")
 def list_servers(
     customer_id: Annotated[
-        str, typer.Argument(help="Customer UUID to list servers for.")
-    ],
+        str | None,
+        typer.Argument(help="Customer UUID (optional when using org API key)."),
+    ] = None,
     output_json: Annotated[
         bool, typer.Option("--json", help="Output result as JSON.")
     ] = False,
 ) -> None:
     """List all MCP servers for a customer.
 
+    When authenticated with an org API key, customer_id is optional and
+    defaults to your organization. With admin API key, customer_id is required.
+
     Examples:
+        mcpheroctl server list
         mcpheroctl server list 550e8400-e29b-41d4-a716-446655440000
-        mcpheroctl server list 550e8400-e29b-41d4-a716-446655440000 --json
+        mcpheroctl server list --json
     """
     try:
         result = _client().list_servers(customer_id)

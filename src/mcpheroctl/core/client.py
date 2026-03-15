@@ -103,8 +103,11 @@ class MCPHeroClient:
     # Server endpoints
     # ------------------------------------------------------------------
 
-    def list_servers(self, customer_id: str) -> Any:
-        return self.get(f"/servers/list/{customer_id}")
+    def list_servers(self, customer_id: str | None = None) -> Any:
+        """List MCP servers. When using org API key, customer_id is optional."""
+        if customer_id is not None:
+            return self.get(f"/servers/list/{customer_id}")
+        return self.get("/servers/list")
 
     def get_server(self, server_id: str) -> Any:
         return self.get(f"/servers/{server_id}/details")
@@ -131,14 +134,13 @@ class MCPHeroClient:
 
     def wizard_start(
         self,
-        customer_id: str,
         description: str,
+        customer_id: str | None = None,
         technical_details: list[str] | None = None,
     ) -> Any:
-        body: dict[str, Any] = {
-            "customer_id": customer_id,
-            "description": description,
-        }
+        body: dict[str, Any] = {"description": description}
+        if customer_id is not None:
+            body["customer_id"] = customer_id
         if technical_details:
             body["technical_details"] = technical_details
         return self.post("/wizard/start", json=body)

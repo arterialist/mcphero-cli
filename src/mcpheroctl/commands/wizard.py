@@ -76,19 +76,22 @@ def _handle_api_error(exc: APIError, *, use_json: bool) -> None:
 
 @wizard_app.command("start")
 def start(
-    customer_id: Annotated[
-        str, typer.Argument(help="Customer UUID that owns the new server.")
-    ],
     spec: Annotated[
         Path,
-        typer.Option(
-            "--spec",
-            "-s",
+        typer.Argument(
             help="Path to a markdown file containing the system/server description.",
             exists=True,
             readable=True,
         ),
     ],
+    customer_id: Annotated[
+        str | None,
+        typer.Option(
+            "--customer-id",
+            "-c",
+            help="Customer UUID (optional when using org API key).",
+        ),
+    ] = None,
     technical_details: Annotated[
         list[Path] | None,
         typer.Option(
@@ -108,10 +111,12 @@ def start(
     Reads the server description from a markdown spec file and optionally
     accepts technical detail files. Triggers background tool suggestion.
 
+    When authenticated with an org API key, --customer-id is optional.
+
     Examples:
-        mcpheroctl wizard start CUSTOMER_ID --spec spec.md
-        mcpheroctl wizard start CUSTOMER_ID --spec spec.md -d api_schema.md -d endpoints.md
-        mcpheroctl wizard start CUSTOMER_ID --spec spec.md --json
+        mcpheroctl wizard start spec.md
+        mcpheroctl wizard start spec.md --customer-id 550e8400-e29b-41d4-a716-446655440000
+        mcpheroctl wizard start spec.md -d api_schema.md -d endpoints.md
     """
     description = spec.read_text()
     tech_details: list[str] | None = None
@@ -119,7 +124,7 @@ def start(
         tech_details = [p.read_text() for p in technical_details]
 
     try:
-        result = _client().wizard_start(customer_id, description, tech_details)
+        result = _client().wizard_start(description, customer_id, tech_details)
         if output_json:
             print_result(result, use_json=True)
         else:
