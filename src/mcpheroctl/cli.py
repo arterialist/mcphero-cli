@@ -27,7 +27,7 @@ app = typer.Typer(
     name="mcpheroctl",
     help="CLI tool for interacting with the MCPHero platform.",
     no_args_is_help=True,
-    rich_markup_mode="rich",
+    rich_markup_mode=None,
     add_completion=True,
     pretty_exceptions_enable=False,
 )

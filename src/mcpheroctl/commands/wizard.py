@@ -39,6 +39,7 @@ wizard_app = typer.Typer(
     name="wizard",
     help="MCP server creation wizard pipeline.",
     no_args_is_help=True,
+    rich_markup_mode=None,
 )
 
 

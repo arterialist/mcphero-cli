@@ -19,6 +19,7 @@ server_app = typer.Typer(
     name="server",
     help="Manage MCP servers.",
     no_args_is_help=True,
+    rich_markup_mode=None,
 )
 
 

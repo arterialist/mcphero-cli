@@ -7,7 +7,7 @@ authors = [
 ]
 requires-python = ">=3.12"
 dependencies = [
-    "typer[all]>=0.15.0",
+    "typer>=0.15.0",
     "httpx>=0.28.0",
     "pydantic>=2.0.0",
     "tenacity>=9.0.0",

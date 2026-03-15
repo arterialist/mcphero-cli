@@ -13,6 +13,7 @@ auth_app = typer.Typer(
     name="auth",
     help="Manage API authentication.",
     no_args_is_help=True,
+    rich_markup_mode=None,
 )
 
 
