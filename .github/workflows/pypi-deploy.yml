@@ -55,3 +55,21 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           skip-existing: true
+
+  update-homebrew-tap:
+    name: Update Homebrew Tap
+    needs: publish-to-pypi
+    runs-on: macos-latest
+    environment: pypi
+
+    steps:
+      - name: Checkout CLI repo
+        uses: actions/checkout@v4
+
+      - name: Install jq
+        run: brew install jq
+
+      - name: Run Tap Update Script
+        env:
+          TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+        run: ./scripts/update-tap.sh
