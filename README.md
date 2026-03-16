@@ -13,26 +13,21 @@ Designed for both human use and AI agent workflows, following [agent-first CLI](
 ## Requirements
 
 - Python ≥ 3.12
-- [uv](https://docs.astral.sh/uv/) ≥ 0.5
+- [uv](https://docs.astral.sh/uv/) or [Homebrew](https://brew.sh/)
 
 ---
 
 ## Installation
 
-### From source (recommended while in development)
+### via Homebrew (macOS/Linux)
 
 ```bash
-git clone git@github.com:arterialist/mcphero-cli.git
-cd mcphero-cli
-uv sync
-uv run mcpheroctl --help
+brew install arterialist/mcpheroctl/mcpheroctl
 ```
 
-### As a pip package (once published)
+### via uv tool (Cross-platform)
 
 ```bash
-pip install mcpheroctl
-# or with uv:
 uv tool install mcpheroctl
 ```
 
@@ -46,7 +41,16 @@ mcpheroctl uses an **organization API token** stored at `~/.config/mcpheroctl/co
 mcpheroctl auth login --token <YOUR_ORG_TOKEN>
 ```
 
-Obtain your token from the MCPHero dashboard. Most commands also accept an optional `--customer-id` / `CUSTOMER_ID` argument; when using an **org API key**, customer context is inferred automatically — passing a customer ID is only required when working with an admin key across multiple customers.
+Obtain your token from the [MCPHero Dashboard](https://mcphero.app).
+
+### Getting a Token
+
+1. Log in to the [MCPHero Dashboard](https://mcphero.app).
+2. Go to **Settings** → **Organization** → **Developers**.
+3. Click **Create API key**.
+4. Copy the generated token for use with `mcpheroctl auth login`.
+
+Most commands also accept an optional `--customer-id` / `CUSTOMER_ID` argument; when using an **org API key**, customer context is inferred automatically — passing a customer ID is only required when working with an admin key across multiple customers.
 
 ### Auth commands
 
@@ -242,16 +246,6 @@ mcpheroctl wizard state SERVER_ID --json
 ```
 
 Useful states: `pending`, `generating_tools`, `tools_ready`, `generating_code`, `code_ready`, `deploying`, `deployed`, `error`.
-
----
-
-### Conversation (stub)
-
-```bash
-mcpheroctl wizard conversation SERVER_ID
-```
-
-> **Not yet implemented.** This feature exists on the frontend but has not been migrated to the backend API. Returns exit code `6` (`not_implemented`).
 
 ---
 
