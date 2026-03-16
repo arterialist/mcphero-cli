@@ -3,7 +3,7 @@
 set -e
 
 PACKAGE_NAME="mcpheroctl"
-TAP_REPO="arterialist/homebrew-tap"
+TAP_REPO="arterialist/homebrew-mcpheroctl"
 TAP_NAME="arterialist/tap"
 FORMULA_FILE="Formula/mcpheroctl.rb"
 
