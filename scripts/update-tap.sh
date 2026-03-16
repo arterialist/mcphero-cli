@@ -4,7 +4,7 @@ set -e
 
 PACKAGE_NAME="mcpheroctl"
 TAP_REPO="arterialist/homebrew-mcpheroctl"
-TAP_NAME="arterialist/tap"
+TAP_NAME="arterialist/homebrew-mcpheroctl"
 FORMULA_FILE="Formula/mcpheroctl.rb"
 
 echo "🔍 Fetching latest PyPI release info for $PACKAGE_NAME..."
