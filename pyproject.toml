@@ -1,6 +1,6 @@
 [project]
 name = "mcpheroctl"
-version = "0.1.0"
+version = "0.2.0"
 description = "CLI tool for interacting with the MCPHero platform"
 authors = [
     { name = "Andrew", email = "contact@arteriali.st" }
