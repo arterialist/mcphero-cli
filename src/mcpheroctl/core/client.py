@@ -132,15 +132,27 @@ class MCPHeroClient:
     # Wizard endpoints
     # ------------------------------------------------------------------
 
-    def wizard_start(
-        self,
-        description: str,
-        customer_id: str | None = None,
-        technical_details: list[str] | None = None,
-    ) -> Any:
-        body: dict[str, Any] = {"description": description}
+    def wizard_create_session(self, customer_id: str | None = None) -> Any:
+        body: dict[str, Any] = {}
         if customer_id is not None:
             body["customer_id"] = customer_id
+        return self.post("/wizard/sessions", json=body)
+
+    def wizard_chat(self, server_id: str, message: str) -> Any:
+        return self.post(
+            f"/wizard/{server_id}/chat",
+            json={"message": message, "stream": False},
+        )
+
+    def wizard_start(
+        self,
+        server_id: str,
+        description: str | None = None,
+        technical_details: list[str] | None = None,
+    ) -> Any:
+        body: dict[str, Any] = {"server_id": server_id}
+        if description is not None:
+            body["description"] = description
         if technical_details:
             body["technical_details"] = technical_details
         return self.post("/wizard/start", json=body)

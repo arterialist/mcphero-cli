@@ -3,6 +3,7 @@
 CLI tool for interacting with the [MCPHero](https://mcphero.app) platform — create, manage, and deploy MCP servers via the wizard pipeline.
 
 Designed for both human use and AI agent workflows, following [agent-first CLI](./agent-first-cli-guide.md) principles:
+
 - Structured JSON output to `stdout`; human-readable messages to `stderr`
 - Documented, meaningful exit codes
 - `--json` flag on every command for scripting / pipeline integration
@@ -54,11 +55,11 @@ Most commands also accept an optional `--customer-id` / `CUSTOMER_ID` argument; 
 
 ### Auth commands
 
-| Command | Description |
-|---------|-------------|
+| Command                               | Description                                  |
+| ------------------------------------- | -------------------------------------------- |
 | `mcpheroctl auth login --token TOKEN` | Save API token (optionally `--base-url URL`) |
-| `mcpheroctl auth status` | Show current auth state and token preview |
-| `mcpheroctl auth logout` | Remove stored credentials |
+| `mcpheroctl auth status`              | Show current auth state and token preview    |
+| `mcpheroctl auth logout`              | Remove stored credentials                    |
 
 ---
 
@@ -89,13 +90,13 @@ Manage deployed MCP servers.
 mcpheroctl server <command>
 ```
 
-| Command | Description |
-|---------|-------------|
-| `list [CUSTOMER_ID]` | List all MCP servers (customer optional with org key) |
-| `get SERVER_ID` | Get full server details |
-| `update SERVER_ID` | Update server `--name` and/or `--description` |
-| `delete SERVER_ID --yes` | Delete a server and all resources |
-| `api-key SERVER_ID` | Retrieve the server's API key |
+| Command                  | Description                                           |
+| ------------------------ | ----------------------------------------------------- |
+| `list [CUSTOMER_ID]`     | List all MCP servers (customer optional with org key) |
+| `get SERVER_ID`          | Get full server details                               |
+| `update SERVER_ID`       | Update server `--name` and/or `--description`         |
+| `delete SERVER_ID --yes` | Delete a server and all resources                     |
+| `api-key SERVER_ID`      | Retrieve the server's API key                         |
 
 ### Examples
 
@@ -132,7 +133,9 @@ mcpheroctl wizard <command>
 ### Pipeline Overview
 
 ```
-  start
+  create-session
+    → conversation (iterate until is_ready)
+    → start
     → list-tools / refine-tools (iterate)
     → submit-tools
     → [suggest-env-vars]
@@ -147,23 +150,57 @@ Poll `wizard state SERVER_ID` between async steps to check when the server is re
 
 ---
 
+### Step 0a: Create Session
+
+```bash
+# Create a new session (returns server_id)
+mcpheroctl wizard create-session
+
+# With explicit customer (admin key)
+mcpheroctl wizard create-session --customer-id CUSTOMER_UUID
+
+# JSON output (returns { "server_id": "..." })
+mcpheroctl wizard create-session --json
+```
+
+Creates a new wizard session and returns a `server_id`. Use this before `conversation` to begin requirements gathering.
+
+---
+
+### Step 0b: Conversation
+
+```bash
+# Chat with the AI to describe your server
+mcpheroctl wizard conversation SERVER_ID -m "I want a GitHub integration server"
+
+# Continue refining requirements
+mcpheroctl wizard conversation SERVER_ID -m "Add webhook support and remove the delete endpoint"
+
+# JSON output (includes is_ready flag)
+mcpheroctl wizard conversation SERVER_ID --message "looks good" --json
+```
+
+Iteratively describe your MCP server to the AI. The response includes an `is_ready` field — when `true`, the AI has gathered enough information and you can proceed with `wizard start` if the requirements are complete.
+
+---
+
 ### Step 1: Start
 
 ```bash
-# Basic start (org key infers customer)
-mcpheroctl wizard start spec.md
+# Transition to tool suggestion (after conversation is_ready)
+mcpheroctl wizard start SERVER_ID
 
-# With explicit customer
-mcpheroctl wizard start spec.md --customer-id CUSTOMER_UUID
+# Optionally override the description with a spec file
+mcpheroctl wizard start SERVER_ID --spec spec.md
 
-# With multiple technical detail files
-mcpheroctl wizard start spec.md -d openapi.md -d schema.md
+# With additional technical detail files
+mcpheroctl wizard start SERVER_ID -d openapi.md -d schema.md
 
-# JSON output (returns { "server_id": "..." })
-mcpheroctl wizard start spec.md --json
+# JSON output
+mcpheroctl wizard start SERVER_ID --json
 ```
 
-`spec.md` — A markdown file describing what the MCP server should do. Technical detail files (`-d`) can contain API schemas, endpoint docs, etc.
+Transitions the server from requirements gathering to tool suggestion. The server must have completed the `conversation` step (`is_ready=true`). Technical detail files (`-d`) can contain API schemas, endpoint docs, etc.
 
 ---
 
@@ -254,8 +291,19 @@ Useful states: `pending`, `generating_tools`, `tools_ready`, `generating_code`, 
 All commands support `--json` for structured output. Combine with `jq` or any JSON tooling:
 
 ```bash
-# Get the server ID after starting the wizard
-SERVER_ID=$(mcpheroctl wizard start spec.md --json | jq -r '.server_id')
+# Create a session and get the server ID
+SERVER_ID=$(mcpheroctl wizard create-session --json | jq -r '.server_id')
+
+# Chat until the AI is ready and the requirements are complete
+while true; do
+  RESP=$(mcpheroctl wizard conversation "$SERVER_ID" -m "I want a weather API server" --json)
+  echo "$RESP" | jq -r '.content'
+  IS_READY=$(echo "$RESP" | jq -r '.is_ready')
+  [ "$IS_READY" = "true" ] && break
+done
+
+# Transition to tool suggestion
+mcpheroctl wizard start "$SERVER_ID" --json
 
 # List tool IDs
 TOOL_IDS=$(mcpheroctl wizard list-tools "$SERVER_ID" --json | jq -r '.[].id')
@@ -277,15 +325,15 @@ done
 
 ## Exit Codes
 
-| Code | Meaning |
-|------|---------|
-| `0` | Success |
-| `1` | General failure |
-| `2` | Usage error (bad arguments) |
-| `3` | Resource not found |
-| `4` | Permission denied / not authenticated |
-| `5` | Conflict (resource already exists) |
-| `6` | Not implemented |
+| Code | Meaning                               |
+| ---- | ------------------------------------- |
+| `0`  | Success                               |
+| `1`  | General failure                       |
+| `2`  | Usage error (bad arguments)           |
+| `3`  | Resource not found                    |
+| `4`  | Permission denied / not authenticated |
+| `5`  | Conflict (resource already exists)    |
+| `6`  | Not implemented                       |
 
 ---
 
@@ -343,13 +391,13 @@ uv run basedpyright
 
 ## Dependencies
 
-| Package | Purpose |
-|---------|---------|
-| [`typer`](https://typer.tiangolo.com) | CLI framework |
-| [`httpx`](https://www.python-httpx.org) | Async-capable HTTP client |
-| [`pydantic`](https://docs.pydantic.dev) | Config validation |
+| Package                                       | Purpose                             |
+| --------------------------------------------- | ----------------------------------- |
+| [`typer`](https://typer.tiangolo.com)         | CLI framework                       |
+| [`httpx`](https://www.python-httpx.org)       | Async-capable HTTP client           |
+| [`pydantic`](https://docs.pydantic.dev)       | Config validation                   |
 | [`tenacity`](https://tenacity.readthedocs.io) | Retry logic on transient/5xx errors |
-| [`rich`](https://rich.readthedocs.io) | Colored stderr output |
+| [`rich`](https://rich.readthedocs.io)         | Colored stderr output               |
 
 ---
 

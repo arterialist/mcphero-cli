@@ -1,24 +1,26 @@
 """Wizard commands for mcpheroctl.
 
 Covers the full MCP server creation wizard pipeline:
-  1. start         – create server and kick off tool suggestion
-  2. list-tools    – view suggested/current tools
-  3. refine-tools  – refine tools via LLM with feedback
-  4. submit-tools  – select tools to keep
+  0a. create-session  – create a session and get server_id
+  0b. conversation    – chat with AI to gather requirements
+  1. start            – transition to tool suggestion (requires readiness)
+  2. list-tools       – view suggested/current tools
+  3. refine-tools     – refine tools via LLM with feedback
+  4. submit-tools     – select tools to keep
   5. suggest-env-vars – trigger env var suggestion
-  6. list-env-vars – view suggested env vars
-  7. refine-env-vars – refine env vars via LLM
-  8. submit-env-vars – provide env var values
-  9. set-auth      – generate bearer token
- 10. generate-code – generate tool implementation code
+  6. list-env-vars    – view suggested env vars
+  7. refine-env-vars  – refine env vars via LLM
+  8. submit-env-vars  – provide env var values
+  9. set-auth         – generate bearer token
+ 10. generate-code    – generate tool implementation code
  11. regenerate-tool-code – regenerate code for a single tool
- 12. deploy        – deploy to shared runtime
- 13. state         – poll current wizard state
- 14. conversation  – (stub) interactive conversation (not yet on backend)
+ 12. deploy           – deploy to shared runtime
+ 13. state            – poll current wizard state
 """
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Annotated
 
@@ -28,11 +30,16 @@ from mcpheroctl.core.client import APIError, MCPHeroClient
 from mcpheroctl.core.output import (
     EXIT_GENERAL_FAILURE,
     EXIT_NOT_FOUND,
-    EXIT_NOT_IMPLEMENTED,
     die,
     info,
     print_result,
     success,
+)
+
+_MARKER_PATTERN = re.compile(
+    r"---TECHNICAL_DETAILS---.*?---END_TECHNICAL_DETAILS---|"
+    r"---READY_TO_START---.*?---END_READY---",
+    re.DOTALL,
 )
 
 wizard_app = typer.Typer(
@@ -70,26 +77,116 @@ def _handle_api_error(exc: APIError, *, use_json: bool) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Step 1: Start wizard
+# Step 0a: Create session
 # ---------------------------------------------------------------------------
 
 
-@wizard_app.command("start")
-def start(
-    spec: Annotated[
-        Path,
-        typer.Argument(
-            help="Path to a markdown file containing the system/server description.",
-            exists=True,
-            readable=True,
-        ),
-    ],
+@wizard_app.command("create-session")
+def create_session(
     customer_id: Annotated[
         str | None,
         typer.Option(
             "--customer-id",
             "-c",
             help="Customer UUID (optional when using org API key).",
+        ),
+    ] = None,
+    output_json: Annotated[
+        bool, typer.Option("--json", help="Output result as JSON.")
+    ] = False,
+) -> None:
+    """Create a new wizard session and return a server_id.
+
+    This is Step 0a of the wizard. After creating a session, use
+    `wizard conversation` to chat with the AI and gather requirements,
+    then `wizard start` once the AI indicates readiness.
+
+    Examples:
+        mcpheroctl wizard create-session
+        mcpheroctl wizard create-session --customer-id 550e8400-e29b-41d4-a716-446655440000
+        mcpheroctl wizard create-session --json
+    """
+    try:
+        result = _client().wizard_create_session(customer_id)
+        if output_json:
+            print_result(result, use_json=True)
+        else:
+            server_id = result.get("server_id", "unknown")
+            success(f"Session created. Server ID: {server_id}")
+            info(
+                "Use `wizard conversation SERVER_ID -m 'your message'` to start chatting."
+            )
+    except APIError as exc:
+        _handle_api_error(exc, use_json=output_json)
+
+
+# ---------------------------------------------------------------------------
+# Step 0b: Conversation
+# ---------------------------------------------------------------------------
+
+
+@wizard_app.command("conversation")
+def conversation(
+    server_id: Annotated[str, typer.Argument(help="Server UUID.")],
+    message: Annotated[
+        str,
+        typer.Option("--message", "-m", help="Message to send to the AI."),
+    ],
+    output_json: Annotated[
+        bool, typer.Option("--json", help="Output result as JSON.")
+    ] = False,
+) -> None:
+    """Send a message in the wizard requirements-gathering chat.
+
+    Iterate on server requirements with the AI until it indicates readiness,
+    then run `wizard start SERVER_ID` to kick off tool suggestion.
+
+    Marker blocks (TECHNICAL_DETAILS, READY_TO_START) are stripped from the
+    displayed content – they are persisted in the database automatically.
+
+    Examples:
+        mcpheroctl wizard conversation SERVER_ID -m "I want a GitHub integration tool"
+        mcpheroctl wizard conversation SERVER_ID --message "Add webhook support" --json
+    """
+    try:
+        result = _client().wizard_chat(server_id, message)
+        raw_content: str = result.get("content", "")
+        is_ready: bool = result.get("is_ready", False)
+        cleaned = _MARKER_PATTERN.sub("", raw_content).strip()
+
+        if output_json:
+            print_result(
+                {"server_id": server_id, "content": cleaned, "is_ready": is_ready},
+                use_json=True,
+            )
+        else:
+            info(cleaned)
+            if is_ready:
+                success(
+                    "The AI has gathered enough information. Run `wizard start SERVER_ID` to proceed."
+                )
+    except APIError as exc:
+        _handle_api_error(exc, use_json=output_json)
+
+
+# ---------------------------------------------------------------------------
+# Step 1: Start wizard (transition to tool suggestion)
+# ---------------------------------------------------------------------------
+
+
+@wizard_app.command("start")
+def start(
+    server_id: Annotated[
+        str, typer.Argument(help="Server UUID (from create-session).")
+    ],
+    spec: Annotated[
+        Path | None,
+        typer.Option(
+            "--spec",
+            "-f",
+            help="Optional markdown file to override the description from chat.",
+            exists=True,
+            readable=True,
         ),
     ] = None,
     technical_details: Annotated[
@@ -106,29 +203,27 @@ def start(
         bool, typer.Option("--json", help="Output result as JSON.")
     ] = False,
 ) -> None:
-    """Start the MCP server creation wizard.
+    """Transition from requirements gathering to tool suggestion.
 
-    Reads the server description from a markdown spec file and optionally
-    accepts technical detail files. Triggers background tool suggestion.
-
-    When authenticated with an org API key, --customer-id is optional.
+    The server must be in gathering_requirements state and the AI must have
+    indicated readiness (conversation returned is_ready=True). Optionally
+    override the description with --spec or add technical details with -d.
 
     Examples:
-        mcpheroctl wizard start spec.md
-        mcpheroctl wizard start spec.md --customer-id 550e8400-e29b-41d4-a716-446655440000
-        mcpheroctl wizard start spec.md -d api_schema.md -d endpoints.md
+        mcpheroctl wizard start SERVER_ID
+        mcpheroctl wizard start SERVER_ID --spec override.md
+        mcpheroctl wizard start SERVER_ID -d api_schema.md -d endpoints.md
     """
-    description = spec.read_text()
+    description: str | None = spec.read_text() if spec else None
     tech_details: list[str] | None = None
     if technical_details:
         tech_details = [p.read_text() for p in technical_details]
 
     try:
-        result = _client().wizard_start(description, customer_id, tech_details)
+        result = _client().wizard_start(server_id, description, tech_details)
         if output_json:
             print_result(result, use_json=True)
         else:
-            server_id = result.get("server_id", "unknown")
             success(f"Wizard started. Server ID: {server_id}")
             info(
                 "Tool suggestion is running in the background. Poll with `wizard state`."
@@ -489,33 +584,3 @@ def state(
         print_result(result, use_json=output_json)
     except APIError as exc:
         _handle_api_error(exc, use_json=output_json)
-
-
-# ---------------------------------------------------------------------------
-# Conversation (stub – frontend-only for now)
-# ---------------------------------------------------------------------------
-
-
-@wizard_app.command("conversation")
-def conversation(
-    server_id: Annotated[str, typer.Argument(help="Server UUID.")],
-    output_json: Annotated[
-        bool, typer.Option("--json", help="Output result as JSON.")
-    ] = False,
-) -> None:
-    """Start an interactive conversation with the wizard.
-
-    NOTE: This feature currently only exists on the frontend and has not yet
-    been migrated to the backend API. This command will be implemented once
-    the backend endpoint is available.
-
-    Examples:
-        mcpheroctl wizard conversation SERVER_ID
-    """
-    die(
-        "The conversation feature is not yet implemented on the backend.",
-        code=EXIT_NOT_IMPLEMENTED,
-        error_type="not_implemented",
-        details={"feature": "wizard_conversation", "server_id": server_id},
-        use_json=output_json,
-    )
