@@ -405,7 +405,7 @@ def submit_env_vars(
     var: Annotated[
         list[str],
         typer.Option("--var", help="Env var value as VAR_UUID=VALUE. Can be repeated."),
-    ],
+    ] = [],
     output_json: Annotated[
         bool, typer.Option("--json", help="Output result as JSON.")
     ] = False,
@@ -413,10 +413,12 @@ def submit_env_vars(
     """Submit environment variable values.
 
     Pass --var for each variable in the format UUID=VALUE.
+    Call with no --var flags when there are no env vars (the backend needs this step to transition).
 
     Examples:
         mcpheroctl wizard submit-env-vars SERVER_ID --var "UUID1=sk-abc123" --var "UUID2=https://api.example.com"
         mcpheroctl wizard submit-env-vars SERVER_ID --var "UUID1=value1" --json
+        mcpheroctl wizard submit-env-vars SERVER_ID --json
     """
     values: dict[str, str] = {}
     for v in var:
